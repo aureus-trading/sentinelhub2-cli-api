@@ -24,6 +24,7 @@ class TxController @Inject()(val controllerComponents: ControllerComponents,
   private val apiExeName = configuration.get[String]("cosmos-app")
   private val chainId = configuration.get[String]("chain-id")
   private val keyringBackend = configuration.get[String]("keyring-backend")
+  private val keyringDir = configuration.get[String]("keyring-dir")
 
   /**
    * Create an Action to render an HTML page.
@@ -38,14 +39,14 @@ class TxController @Inject()(val controllerComponents: ControllerComponents,
              assetId: String) = Action { implicit request: Request[AnyContent] =>
 
     val fileToSign = (fromaddress + "_" + toaddress + "_" + (Calendar.getInstance().toInstant.toString + ".json").toLowerCase())
-    val commandGenerateTransactions = s"./${apiExeName} tx bank send $fromaddress $toaddress ${amount}${assetId} --chain-id ${chainId} --keyring-backend ${keyringBackend} --generate-only"
+    val commandGenerateTransactions = s"${apiExeName} tx bank send $fromaddress $toaddress ${amount}${assetId} --chain-id ${chainId} --keyring-backend ${keyringBackend} --keyring-dir ${keyringDir} --generate-only"
 
     try {
       val generateJsonTransaction = commandGenerateTransactions.!!
       val jsonWriter = new PrintWriter(new File(fileToSign))
       jsonWriter.write(generateJsonTransaction)
       jsonWriter.close()
-      val commandSignTransaction = s"./${apiExeName} tx sign  ${fileToSign} --chain-id ${chainId} --keyring-backend ${keyringBackend} --from ${fromaddress}"
+      val commandSignTransaction = s"${apiExeName} tx sign  ${fileToSign} --chain-id ${chainId} --keyring-backend ${keyringBackend} --keyring-dir ${keyringDir} --from ${fromaddress}"
       val signedTransaction = commandSignTransaction.!!
       val file = io.File(fileToSign)
       file.delete()
@@ -70,7 +71,7 @@ class TxController @Inject()(val controllerComponents: ControllerComponents,
       val jsonWriter = new PrintWriter(new File(fileName))
       jsonWriter.write(decodedBytesToString)
       jsonWriter.close()
-      val commandBroadCastTransaction = s"./${apiExeName} tx broadcast  ${fileName} --broadcast-mode sync"
+      val commandBroadCastTransaction = s"${apiExeName} tx broadcast  ${fileName} --broadcast-mode sync"
       val signedTransaction = commandBroadCastTransaction.!!
       val splitResult = signedTransaction.split("\n").toList
       val txResult : TransactionBroadcast = new TransactionBroadcast(splitResult(0).split(":")(1),
