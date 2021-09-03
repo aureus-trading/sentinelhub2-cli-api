@@ -25,6 +25,8 @@ class TxController @Inject()(val controllerComponents: ControllerComponents,
   private val chainId = configuration.get[String]("chain-id")
   private val keyringBackend = configuration.get[String]("keyring-backend")
   private val keyringDir = configuration.get[String]("keyring-dir")
+  private val gasPrice = configuration.get[String]("gas-prices")
+  private val gas = configuration.get[String]("gas")
 
   /**
    * Create an Action to render an HTML page.
@@ -39,14 +41,13 @@ class TxController @Inject()(val controllerComponents: ControllerComponents,
              assetId: String) = Action { implicit request: Request[AnyContent] =>
 
     val fileToSign = (fromaddress + "_" + toaddress + "_" + (Calendar.getInstance().toInstant.toString + ".json").toLowerCase())
-    val commandGenerateTransactions = s"${apiExeName} tx bank send $fromaddress $toaddress ${amount}${assetId} --chain-id ${chainId} --keyring-backend ${keyringBackend} --keyring-dir ${keyringDir} --generate-only"
-
+    val commandGenerateTransactions = s"${apiExeName} tx bank send ${fromaddress} ${toaddress} ${amount}${assetId} --chain-id ${chainId} --keyring-backend ${keyringBackend} --keyring-dir ${keyringDir} --gas-prices ${gasPrice} --gas ${gas} --yes --generate-only"
     try {
       val generateJsonTransaction = commandGenerateTransactions.!!
       val jsonWriter = new PrintWriter(new File(fileToSign))
       jsonWriter.write(generateJsonTransaction)
       jsonWriter.close()
-      val commandSignTransaction = s"${apiExeName} tx sign  ${fileToSign} --chain-id ${chainId} --keyring-backend ${keyringBackend} --keyring-dir ${keyringDir} --from ${fromaddress}"
+      val commandSignTransaction = s"${apiExeName} tx sign  ${fileToSign} --chain-id ${chainId} --keyring-backend ${keyringBackend} --keyring-dir ${keyringDir} --from ${fromaddress} --gas-prices ${gasPrice} --gas ${gas}"
       val signedTransaction = commandSignTransaction.!!
       val file = io.File(fileToSign)
       file.delete()
@@ -71,7 +72,7 @@ class TxController @Inject()(val controllerComponents: ControllerComponents,
       val jsonWriter = new PrintWriter(new File(fileName))
       jsonWriter.write(decodedBytesToString)
       jsonWriter.close()
-      val commandBroadCastTransaction = s"${apiExeName} tx broadcast  ${fileName} --broadcast-mode sync"
+      val commandBroadCastTransaction = s"${apiExeName} tx broadcast  ${fileName} --broadcast-mode sync  --keyring-backend ${keyringBackend} --keyring-dir ${keyringDir} --gas-prices ${gasPrice} --gas ${gas}"
       val signedTransaction = commandBroadCastTransaction.!!
       val splitResult = signedTransaction.split("\n").toList
       val txResult : TransactionBroadcast = new TransactionBroadcast(splitResult(0).split(":")(1),
