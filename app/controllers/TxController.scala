@@ -5,9 +5,10 @@ import models.{BroadcastedTransactionResult, SignedTransactionResult, Transactio
 import play.api.Configuration
 import play.api.libs.json.Json
 import play.api.mvc._
+import play.api.Logger
 
 import java.io.{File, PrintWriter}
-import java.util.Calendar
+import java.util.{Calendar, UUID}
 import java.util.UUID.randomUUID
 import javax.inject._
 import scala.reflect.io
@@ -27,7 +28,8 @@ class TxController @Inject()(val controllerComponents: ControllerComponents,
   private val keyringDir = configuration.get[String]("keyring-dir")
   private val gasPrice = configuration.get[String]("gas-prices")
   private val gas = configuration.get[String]("gas")
-
+  private val password = configuration.get[String]("password")
+  private val logger: Logger = Logger(this.getClass())
   /**
    * Create an Action to render an HTML page.
    *
@@ -40,15 +42,18 @@ class TxController @Inject()(val controllerComponents: ControllerComponents,
              amount: Long,
              assetId: String) = Action { implicit request: Request[AnyContent] =>
 
-    val fileToSign = (fromaddress + "_" + toaddress + "_" + (Calendar.getInstance().toInstant.toString + ".json").toLowerCase())
-    val commandGenerateTransactions = s"${apiExeName} tx bank send ${fromaddress} ${toaddress} ${amount}${assetId} --chain-id ${chainId} --keyring-backend ${keyringBackend} --keyring-dir ${keyringDir} --gas-prices ${gasPrice} --gas ${gas} --yes --generate-only"
+    val fileToSign = UUID.randomUUID() +  (Calendar.getInstance().toInstant.toString + ".json").toLowerCase()
+    val commandGenerateTransactions = s"echo '${password}' | ${apiExeName} tx bank send ${fromaddress} ${toaddress} ${amount}${assetId} --chain-id ${chainId} --keyring-backend ${keyringBackend} --keyring-dir ${keyringDir} --gas-prices ${gasPrice} --gas ${gas} --yes --generate-only"
     try {
-      val generateJsonTransaction = commandGenerateTransactions.!!
+      val seqScriptGenTX= Seq("/bin/sh","-c", commandGenerateTransactions)
+      val generateJsonTransaction = seqScriptGenTX.!!.trim
       val jsonWriter = new PrintWriter(new File(fileToSign))
       jsonWriter.write(generateJsonTransaction)
       jsonWriter.close()
-      val commandSignTransaction = s"${apiExeName} tx sign  ${fileToSign} --chain-id ${chainId} --keyring-backend ${keyringBackend} --keyring-dir ${keyringDir} --from ${fromaddress} --gas-prices ${gasPrice} --gas ${gas}"
-      val signedTransaction = commandSignTransaction.!!
+      logger.info(s"Generating Unsigned TX from ${fromaddress} to ${toaddress} amount ${amount} denom ${assetId}")
+      val commandSignTransaction = s"echo '${password}' | ${apiExeName} tx sign  ${fileToSign} --chain-id ${chainId} --keyring-backend ${keyringBackend} --keyring-dir ${keyringDir} --from ${fromaddress} --gas-prices ${gasPrice} --gas ${gas}"
+      val seqScriptSignTX= Seq("/bin/sh","-c", commandSignTransaction)
+      val signedTransaction = seqScriptSignTX.!!.trim
       val file = io.File(fileToSign)
       file.delete()
       val encodedBytes = base64.encode(signedTransaction.getBytes())
@@ -57,7 +62,8 @@ class TxController @Inject()(val controllerComponents: ControllerComponents,
       case exception: Exception => {
         val file = io.File(fileToSign)
         file.delete()
-        BadRequest(Json.toJson(SignedTransactionResult(true, exception.getMessage, "")))
+        logger.error(exception.getMessage)
+        BadRequest(Json.toJson(SignedTransactionResult(true, "error has occured", "")))
       }
     }
   }
