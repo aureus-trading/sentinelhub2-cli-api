@@ -30,6 +30,7 @@ class TxController @Inject()(val controllerComponents: ControllerComponents,
   private val gas = configuration.get[String]("gas")
   private val password = configuration.get[String]("password")
   private val logger: Logger = Logger(this.getClass())
+  private val nodeRpcUrl = configuration.get[String]("node-url")
   /**
    * Create an Action to render an HTML page.
    *
@@ -43,7 +44,7 @@ class TxController @Inject()(val controllerComponents: ControllerComponents,
              assetId: String) = Action { implicit request: Request[AnyContent] =>
 
     val fileToSign = UUID.randomUUID() +  (Calendar.getInstance().toInstant.toString + ".json").toLowerCase()
-    val commandGenerateTransactions = s"echo '${password}' | ${apiExeName} tx bank send ${fromaddress} ${toaddress} ${amount}${assetId} --chain-id ${chainId} --keyring-backend ${keyringBackend} --keyring-dir ${keyringDir} --gas-prices ${gasPrice} --gas ${gas} --yes --generate-only"
+    val commandGenerateTransactions = s"""echo '${password}' | ${apiExeName} tx bank send ${fromaddress} ${toaddress} ${amount}${assetId} --chain-id ${chainId} --keyring-backend ${keyringBackend} --keyring-dir ${keyringDir} --gas-prices ${gasPrice} --gas ${gas} --yes --generate-only --node "${nodeRpcUrl}""""
     try {
       val seqScriptGenTX= Seq("/bin/sh","-c", commandGenerateTransactions)
       val generateJsonTransaction = seqScriptGenTX.!!.trim
@@ -51,7 +52,7 @@ class TxController @Inject()(val controllerComponents: ControllerComponents,
       jsonWriter.write(generateJsonTransaction)
       jsonWriter.close()
       logger.info(s"Generating Unsigned TX from ${fromaddress} to ${toaddress} amount ${amount} denom ${assetId}")
-      val commandSignTransaction = s"echo '${password}' | ${apiExeName} tx sign  ${fileToSign} --chain-id ${chainId} --keyring-backend ${keyringBackend} --keyring-dir ${keyringDir} --from ${fromaddress} --gas-prices ${gasPrice} --gas ${gas}"
+      val commandSignTransaction = s"""echo '${password}' | ${apiExeName} tx sign  ${fileToSign} --chain-id ${chainId} --keyring-backend ${keyringBackend} --keyring-dir ${keyringDir} --from ${fromaddress} --gas-prices ${gasPrice} --gas ${gas} --node "${nodeRpcUrl}""""
       val seqScriptSignTX= Seq("/bin/sh","-c", commandSignTransaction)
       val signedTransaction = seqScriptSignTX.!!.trim
       val file = io.File(fileToSign)
@@ -78,13 +79,13 @@ class TxController @Inject()(val controllerComponents: ControllerComponents,
       val jsonWriter = new PrintWriter(new File(fileName))
       jsonWriter.write(decodedBytesToString)
       jsonWriter.close()
-      val commandBroadCastTransaction = s"${apiExeName} tx broadcast  ${fileName} --broadcast-mode sync  --keyring-backend ${keyringBackend} --keyring-dir ${keyringDir} --gas-prices ${gasPrice} --gas ${gas}"
+      val commandBroadCastTransaction = s"""${apiExeName} tx broadcast  ${fileName} --broadcast-mode sync  --keyring-backend ${keyringBackend} --keyring-dir ${keyringDir} --gas-prices ${gasPrice} --gas ${gas} --node "${nodeRpcUrl}""""
       val signedTransaction = commandBroadCastTransaction.!!
       val splitResult = signedTransaction.split("\n").toList
-      val txResult : TransactionBroadcast = new TransactionBroadcast(splitResult(0).split(":")(1),
-        splitResult(8).split(":")(1),
-        splitResult(9).split(":")(1),
-        splitResult(11).split(":")(1))
+      val txResult : TransactionBroadcast = new TransactionBroadcast(splitResult(0).split(":")(1).trim,
+        splitResult(8).split(":")(1).trim,
+        splitResult(9).split(":")(1).trim,
+        splitResult(11).split(":")(1).trim)
       val file = io.File(fileName)
       file.delete()
       Ok(Json.toJson(BroadcastedTransactionResult(false, "", txResult)))
