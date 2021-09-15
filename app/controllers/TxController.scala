@@ -45,14 +45,16 @@ class TxController @Inject()(val controllerComponents: ControllerComponents,
 
     val fileToSign = UUID.randomUUID() +  (Calendar.getInstance().toInstant.toString + ".json").toLowerCase()
     val commandGenerateTransactions = s"""echo '${password}' | ${apiExeName} tx bank send ${fromaddress} ${toaddress} ${amount}${assetId} --chain-id ${chainId} --keyring-backend ${keyringBackend} --keyring-dir ${keyringDir} --gas-prices ${gasPrice} --gas ${gas} --yes --generate-only --node "${nodeRpcUrl}""""
+    var commandSignTransaction = ""
+    var generateJsonTransaction = ""
     try {
       val seqScriptGenTX= Seq("/bin/sh","-c", commandGenerateTransactions)
-      val generateJsonTransaction = seqScriptGenTX.!!.trim
+      generateJsonTransaction = seqScriptGenTX.!!.trim
       val jsonWriter = new PrintWriter(new File(fileToSign))
       jsonWriter.write(generateJsonTransaction)
       jsonWriter.close()
       logger.info(s"Generating Unsigned TX from ${fromaddress} to ${toaddress} amount ${amount} denom ${assetId}")
-      val commandSignTransaction = s"""echo '${password}' | ${apiExeName} tx sign  ${fileToSign} --chain-id ${chainId} --keyring-backend ${keyringBackend} --keyring-dir ${keyringDir} --from ${fromaddress} --gas-prices ${gasPrice} --gas ${gas} --node "${nodeRpcUrl}""""
+      commandSignTransaction = s"""echo '${password}' | ${apiExeName} tx sign  ${fileToSign} --chain-id ${chainId} --keyring-backend ${keyringBackend} --keyring-dir ${keyringDir} --from ${fromaddress} --gas-prices ${gasPrice} --gas ${gas} --node "${nodeRpcUrl}""""
       val seqScriptSignTX= Seq("/bin/sh","-c", commandSignTransaction)
       val signedTransaction = seqScriptSignTX.!!.trim
       val file = io.File(fileToSign)
@@ -63,8 +65,8 @@ class TxController @Inject()(val controllerComponents: ControllerComponents,
       case exception: Exception => {
         val file = io.File(fileToSign)
         file.delete()
-        logger.error(exception.getMessage)
-        BadRequest(Json.toJson(SignedTransactionResult(true, "error has occured", "")))
+        logger.error(exception.getMessage + " " + commandSignTransaction)
+        BadRequest(Json.toJson(SignedTransactionResult(true,exception.getMessage + " " + commandSignTransaction + " " + generateJsonTransaction, "")))
       }
     }
   }
@@ -73,6 +75,7 @@ class TxController @Inject()(val controllerComponents: ControllerComponents,
     val newId = randomUUID()
     val jsonBody: Option[String] = request.body.asText
     val fileName = newId + "_" + Calendar.getInstance().toInstant.toString
+    var signedTransaction = ""
     try {
       val decodedBytes = base64.decode(jsonBody.getOrElse(""))
       val decodedBytesToString = new String(decodedBytes)
@@ -80,7 +83,7 @@ class TxController @Inject()(val controllerComponents: ControllerComponents,
       jsonWriter.write(decodedBytesToString)
       jsonWriter.close()
       val commandBroadCastTransaction = s"""${apiExeName} tx broadcast  ${fileName} --broadcast-mode sync  --keyring-backend ${keyringBackend} --keyring-dir ${keyringDir} --gas-prices ${gasPrice} --gas ${gas} --node "${nodeRpcUrl}""""
-      val signedTransaction = commandBroadCastTransaction.!!
+      signedTransaction = commandBroadCastTransaction.!!
       val splitResult = signedTransaction.split("\n").toList
       val txResult : TransactionBroadcast = new TransactionBroadcast(splitResult(0).split(":")(1).trim,
         splitResult(8).split(":")(1).trim,
@@ -93,7 +96,8 @@ class TxController @Inject()(val controllerComponents: ControllerComponents,
       case exception: Exception => {
         val file = io.File(fileName)
         file.delete()
-        BadRequest(Json.toJson(SignedTransactionResult(true, exception.getMessage, "")))
+        logger.error(exception.getMessage + " " + signedTransaction)
+        BadRequest(Json.toJson(SignedTransactionResult(true, exception.getMessage + " " + signedTransaction, "")))
       }
     }
   }
