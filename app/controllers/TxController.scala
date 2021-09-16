@@ -31,6 +31,9 @@ class TxController @Inject()(val controllerComponents: ControllerComponents,
   private val password = configuration.get[String]("password")
   private val logger: Logger = Logger(this.getClass())
   private val nodeRpcUrl = configuration.get[String]("node-url")
+
+  var test =  "{\"height\":\"0\",\"txhash\":\"9C925D480381FACEAF32EE923673A26BB479CAC2129DE50A7F5F9362C0918D0B\",\"codespace\":\"\",\"code\":0,\"data\":\"\",\"raw_log\":\"[]\",\"logs\":[],\"info\":\"\",\"gas_wanted\":\"0\",\"gas_used\":\"0\",\"tx\":null,\"timestamp\":\"\"}\n"
+
   /**
    * Create an Action to render an HTML page.
    *
@@ -75,7 +78,7 @@ class TxController @Inject()(val controllerComponents: ControllerComponents,
     val newId = randomUUID()
     val jsonBody: Option[String] = request.body.asText
     val fileName = newId + "_" + Calendar.getInstance().toInstant.toString
-    var signedTransaction = ""
+    var splitResult = ""
     try {
       val decodedBytes = base64.decode(jsonBody.getOrElse(""))
       val decodedBytesToString = new String(decodedBytes)
@@ -83,12 +86,16 @@ class TxController @Inject()(val controllerComponents: ControllerComponents,
       jsonWriter.write(decodedBytesToString)
       jsonWriter.close()
       val commandBroadCastTransaction = s"""${apiExeName} tx broadcast  ${fileName} --broadcast-mode sync  --keyring-backend ${keyringBackend} --keyring-dir ${keyringDir} --gas-prices ${gasPrice} --gas ${gas} --node "${nodeRpcUrl}""""
-      signedTransaction = commandBroadCastTransaction.!!
-      val splitResult = signedTransaction.split("\n").toList
-      val txResult : TransactionBroadcast = new TransactionBroadcast(splitResult(0).split(":")(1).trim,
-        splitResult(8).split(":")(1).trim,
-        splitResult(9).split(":")(1).trim,
-        splitResult(11).split(":")(1).trim)
+      val broadCastTX =  commandBroadCastTransaction.!!.trim
+      val trimmedBroadcastTX = broadCastTX.replace("\"", "")
+      var splitResult = trimmedBroadcastTX.split("\n").toList
+      if(splitResult.size <= 1){
+        splitResult = trimmedBroadcastTX.split(",").toList
+      }
+       val txHash = checkForTheField("txhash", splitResult).replace("/", "").replace("\"", "")
+      val rawData = checkForTheField("raw_data", splitResult).replace("/","\"")
+      val code = checkForTheField("raw_data", splitResult).replace("/","\"")
+      val txResult : TransactionBroadcast = new TransactionBroadcast(code.trim, rawData.trim,txHash.trim)
       val file = io.File(fileName)
       file.delete()
       Ok(Json.toJson(BroadcastedTransactionResult(false, "", txResult)))
@@ -96,9 +103,22 @@ class TxController @Inject()(val controllerComponents: ControllerComponents,
       case exception: Exception => {
         val file = io.File(fileName)
         file.delete()
-        logger.error(exception.getMessage + " " + signedTransaction)
-        BadRequest(Json.toJson(SignedTransactionResult(true, exception.getMessage + " " + signedTransaction, "")))
+        logger.error(exception.getMessage + " " + splitResult)
+        BadRequest(Json.toJson(SignedTransactionResult(true, exception.getMessage + " " + splitResult, "")))
       }
     }
+  }
+
+  def checkForTheField(index: String, searchText : List[String]): String = {
+    var result = ""
+    for (item <- searchText) {
+      if (item.contains(index)) {
+        val findIndex = item.trim.indexOf(":")
+        if (findIndex != -1) {
+          result = item.substring(findIndex + 1, item.size).trim
+        }
+      }
+    }
+    result
   }
 }

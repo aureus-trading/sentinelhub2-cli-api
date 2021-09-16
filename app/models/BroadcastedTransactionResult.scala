@@ -5,7 +5,7 @@ import play.api.libs.json.{Format, JsPath, Json, Reads, Writes}
 
 case class BroadcastedTransactionResult(hasError: Boolean, error: String, tx: TransactionBroadcast)
 
-case class TransactionBroadcast(code: String, raw_logs: String, timestamp: String, txhash: String)
+case class TransactionBroadcast(code: String, raw_logs: String, txhash: String)
 
 object BroadcastedTransactionResult {
 
@@ -26,13 +26,11 @@ object TransactionBroadcast {
   implicit val TWRModelWrite: Writes[TransactionBroadcast] = (
     (JsPath \ "code").write[String] and
       (JsPath \ "txhash").write[String] and
-      (JsPath \ "raw_logs").write[String] and
-      (JsPath \ "timestamp").write[String]) (unlift(TransactionBroadcast.unapply))
+      (JsPath \ "raw_logs").write[String]) (unlift(TransactionBroadcast.unapply))
 
   implicit val rdCHR : Reads[TransactionBroadcast] = (
     (JsPath \ "code").read[String] and
       (JsPath \ "txhash").read[String] and
-      (JsPath \ "raw_logs").read[String] and
-      (JsPath \ "timestamp").read[String])(TransactionBroadcast.apply _)
+      (JsPath \ "raw_logs").read[String])(TransactionBroadcast.apply _)
 }
 
