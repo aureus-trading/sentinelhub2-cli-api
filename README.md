@@ -6,7 +6,7 @@ generating transaction on Sentinel Network, which is built on Cosmos SDK platfor
 
 ##### Requirements
 1. Install Open Java JDK 11 or higher and Scala SBT
-2. Install Scala SDK 2.13.3 and higher
+2. Install Scala SDK 2.13.3 and higher plus Sbt.
 2. Install Cosmos SDK. Please follow instractions on https://hub.cosmos.network/main/getting-started/installation.html.
 
 ##### How to run
@@ -30,6 +30,18 @@ generating transaction on Sentinel Network, which is built on Cosmos SDK platfor
    f.  node-url = specify url of your node -> sentinelhub-cli For example: "tcp://192.168.21.129:26657".
    g.  apiKey = api keys for http calls to api service.
    h.  keyring-backend = what type of keyring is set. Default file.
+
+
+3.  Built the project and run it.
+    sbt package
+    sbt build
+
+4. Debug
+   sbt run
+
+#### For more information how to build and run scala app with Play Framework please follow instruction
+    https://www.playframework.com/documentation/2.8.x/Deploying
+
 ##### Endpoins
 
 Generate and sign transaction and return as Json response.
@@ -50,6 +62,8 @@ Broadcast Transaction
 Request Body = { "tx": "Base64 Tx"}
 ###### Response:
 {hasError: boolean, error: string, signedTransaction: Based64 Tx}
+
+
 
     
 
